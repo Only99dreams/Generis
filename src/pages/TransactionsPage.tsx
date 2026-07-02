@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getTransactionsPaginated } from "../services/wallet";
 import { useAuth } from "../context/AuthContext";
+import { Input } from "../components/ui/input";
 import { Card, CardContent } from "../components/ui/card";
 import Pagination from "../components/Pagination";
 import { formatCurrency, formatDate } from "../lib/utils";
@@ -13,26 +14,64 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
 
   useEffect(() => {
-    loadData(0);
+    loadData(0, search, typeFilter);
     setPage(0);
   }, [organization?.id]);
 
-  const loadData = async (p: number) => {
-    const { data, count } = await getTransactionsPaginated(p, PAGE_SIZE, organization?.id);
+  const loadData = async (p: number, s = search, t = typeFilter) => {
+    const { data, count } = await getTransactionsPaginated(p, PAGE_SIZE, organization?.id, s || undefined, t || undefined);
     setTransactions(data);
     setTotal(count);
   };
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    loadData(p);
+    loadData(p, search, typeFilter);
+  };
+
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setPage(0);
+    loadData(0, val, typeFilter);
+  };
+
+  const handleTypeFilter = (val: string) => {
+    setTypeFilter(val);
+    setPage(0);
+    loadData(0, search, val);
   };
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Statement</h1>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <Input
+            placeholder="Search transactions..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => handleTypeFilter(e.target.value)}
+          className="w-full sm:w-44 h-12 px-4 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow/50"
+        >
+          <option value="">All Types</option>
+          <option value="credit">Credit</option>
+          <option value="debit">Debit</option>
+          <option value="transfer">Transfer</option>
+          <option value="fee">Fee</option>
+          <option value="payment">Payment</option>
+        </select>
+      </div>
 
       <Card>
         <CardContent className="p-0 divide-y divide-gray-100">

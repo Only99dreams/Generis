@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { getPaymentsPaginated } from "../services/payments";
+import { Input } from "../components/ui/input";
 import { Card, CardContent } from "../components/ui/card";
 import Pagination from "../components/Pagination";
 import { useRealtimePayments } from "../services/realtime";
@@ -13,31 +14,85 @@ export default function Payments() {
   const [payments, setPayments] = useState<any[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [channelFilter, setChannelFilter] = useState("");
 
-  const loadPayments = async (p = 0) => {
+  const loadPayments = async (p = 0, s = search, st = statusFilter, ch = channelFilter) => {
     if (!organization?.id) return;
-    const { data, count } = await getPaymentsPaginated(organization.id, p, PAGE_SIZE);
+    const { data, count } = await getPaymentsPaginated(organization.id, p, PAGE_SIZE, s || undefined, st || undefined, ch || undefined);
     setPayments(data);
     setTotal(count);
   };
 
   useEffect(() => {
-    loadPayments(0);
+    loadPayments(0, search, statusFilter, channelFilter);
     setPage(0);
   }, [organization?.id]);
 
   useRealtimePayments(organization?.id || "", () => {
-    loadPayments(page);
+    loadPayments(page, search, statusFilter, channelFilter);
   });
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    loadPayments(p);
+    loadPayments(p, search, statusFilter, channelFilter);
+  };
+
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setPage(0);
+    loadPayments(0, val, statusFilter, channelFilter);
+  };
+
+  const handleStatusFilter = (val: string) => {
+    setStatusFilter(val);
+    setPage(0);
+    loadPayments(0, search, val, channelFilter);
+  };
+
+  const handleChannelFilter = (val: string) => {
+    setChannelFilter(val);
+    setPage(0);
+    loadPayments(0, search, statusFilter, val);
   };
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Payments</h1>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <Input
+            placeholder="Search reference..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => handleStatusFilter(e.target.value)}
+          className="w-full sm:w-40 h-12 px-4 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow/50"
+        >
+          <option value="">All Status</option>
+          <option value="completed">Completed</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+        </select>
+        <select
+          value={channelFilter}
+          onChange={(e) => handleChannelFilter(e.target.value)}
+          className="w-full sm:w-40 h-12 px-4 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow/50"
+        >
+          <option value="">All Channels</option>
+          <option value="virtual_account">Virtual Account</option>
+          <option value="card">Card</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="ussd">USSD</option>
+        </select>
+      </div>
 
       <Card>
         <CardContent className="p-0">

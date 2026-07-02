@@ -74,6 +74,8 @@ export default function Customers() {
   const [phone, setPhone] = useState("");
   const [creating, setCreating] = useState(false);
 
+  const [search, setSearch] = useState("");
+
   const [editingCustomer, setEditingCustomer] = useState<CustomerWithAccount | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -87,10 +89,10 @@ export default function Customers() {
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadResults, setUploadResults] = useState<{ success: number; failed: number } | null>(null);
 
-  const loadCustomers = async (p = page) => {
+  const loadCustomers = async (p = page, s = search) => {
     if (!organization?.id) return;
     setLoading(true);
-    const { data, count } = await getCustomersPaginated(organization.id, p, PAGE_SIZE);
+    const { data, count } = await getCustomersPaginated(organization.id, p, PAGE_SIZE, s || undefined);
     setTotal(count);
     const withAccounts: CustomerWithAccount[] = [];
     for (const c of data) {
@@ -102,13 +104,19 @@ export default function Customers() {
   };
 
   useEffect(() => {
-    loadCustomers(0);
+    loadCustomers(0, search);
     setPage(0);
   }, [organization?.id]);
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    loadCustomers(p);
+    loadCustomers(p, search);
+  };
+
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setPage(0);
+    loadCustomers(0, val);
   };
 
   const handleCreate = async () => {
@@ -228,6 +236,18 @@ export default function Customers() {
             <Plus className="w-4 h-4" />
             Add Customer
           </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <Input
+            placeholder="Search customers..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+          />
         </div>
       </div>
 

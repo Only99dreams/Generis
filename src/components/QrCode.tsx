@@ -15,7 +15,7 @@ export default function QrCode({ value, size = 200 }: QrCodeProps) {
       QRCode.toCanvas(canvasRef.current, value, {
         width: size,
         margin: 2,
-        color: { dark: "#ffffff", light: "#ffffff" },
+        color: { dark: "#000000", light: "#ffffff" },
       });
     });
     return () => { mounted = false; };

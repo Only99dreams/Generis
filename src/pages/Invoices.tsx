@@ -23,11 +23,13 @@ export default function Invoices() {
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
-  const loadData = async (p = 0) => {
+  const loadData = async (p = 0, s = search, st = statusFilter) => {
     if (!organization?.id) return;
     const [invData, custData] = await Promise.all([
-      getInvoicesPaginated(organization.id, p, PAGE_SIZE),
+      getInvoicesPaginated(organization.id, p, PAGE_SIZE, s || undefined, st || undefined),
       getCustomers(organization.id),
     ]);
     setInvoices(invData.data);
@@ -36,13 +38,25 @@ export default function Invoices() {
   };
 
   useEffect(() => {
-    loadData(0);
+    loadData(0, search, statusFilter);
     setPage(0);
   }, [organization?.id]);
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    loadData(p);
+    loadData(p, search, statusFilter);
+  };
+
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setPage(0);
+    loadData(0, val, statusFilter);
+  };
+
+  const handleStatusFilter = (val: string) => {
+    setStatusFilter(val);
+    setPage(0);
+    loadData(0, search, val);
   };
 
   const handleCreate = async () => {
@@ -70,6 +84,30 @@ export default function Invoices() {
         <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? "Cancel" : "Create Invoice"}
         </Button>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <Input
+            placeholder="Search invoice #..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => handleStatusFilter(e.target.value)}
+          className="w-full sm:w-44 h-12 px-4 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow/50"
+        >
+          <option value="">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="paid">Paid</option>
+          <option value="partial">Partial</option>
+          <option value="overdue">Overdue</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
       </div>
 
       {showForm && (

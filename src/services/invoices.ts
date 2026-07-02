@@ -45,14 +45,24 @@ export async function getInvoices(orgId: string): Promise<Invoice[]> {
   return data || [];
 }
 
-export async function getInvoicesPaginated(orgId: string, page = 0, pageSize = 20): Promise<{ data: Invoice[]; count: number }> {
+export async function getInvoicesPaginated(orgId: string, page = 0, pageSize = 20, search?: string, status?: string): Promise<{ data: Invoice[]; count: number }> {
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  const { data, count } = await supabase
+  let query = supabase
     .from("invoices")
     .select("*, customers(full_name, email)", { count: "exact" })
-    .eq("organization_id", orgId)
+    .eq("organization_id", orgId);
+
+  if (search) {
+    query = query.ilike("invoice_number", `%${search}%`);
+  }
+
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  const { data, count } = await query
     .order("created_at", { ascending: false })
     .range(from, to);
 

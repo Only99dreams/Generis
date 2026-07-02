@@ -39,7 +39,7 @@ export async function getTransactions(limit = 20, organizationId?: string): Prom
   return data || [];
 }
 
-export async function getTransactionsPaginated(page = 0, pageSize = 20, organizationId?: string): Promise<{ data: Transaction[]; count: number }> {
+export async function getTransactionsPaginated(page = 0, pageSize = 20, organizationId?: string, search?: string, type?: string): Promise<{ data: Transaction[]; count: number }> {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) return { data: [], count: 0 };
 
@@ -54,6 +54,14 @@ export async function getTransactionsPaginated(page = 0, pageSize = 20, organiza
     query = query.eq("organization_id", organizationId);
   } else {
     query = query.eq("user_id", user.id);
+  }
+
+  if (search) {
+    query = query.ilike("narration", `%${search}%`);
+  }
+
+  if (type) {
+    query = query.eq("transaction_type", type);
   }
 
   const { data, count } = await query

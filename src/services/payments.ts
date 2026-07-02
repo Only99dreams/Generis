@@ -11,14 +11,28 @@ export async function getPayments(orgId: string): Promise<Payment[]> {
   return data || [];
 }
 
-export async function getPaymentsPaginated(orgId: string, page = 0, pageSize = 20): Promise<{ data: Payment[]; count: number }> {
+export async function getPaymentsPaginated(orgId: string, page = 0, pageSize = 20, search?: string, status?: string, channel?: string): Promise<{ data: Payment[]; count: number }> {
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  const { data, count } = await supabase
+  let query = supabase
     .from("payments")
     .select("*, customers(full_name), invoices(invoice_number)", { count: "exact" })
-    .eq("organization_id", orgId)
+    .eq("organization_id", orgId);
+
+  if (search) {
+    query = query.ilike("reference", `%${search}%`);
+  }
+
+  if (status) {
+    query = query.eq("payment_status", status);
+  }
+
+  if (channel) {
+    query = query.eq("payment_channel", channel);
+  }
+
+  const { data, count } = await query
     .order("created_at", { ascending: false })
     .range(from, to);
 

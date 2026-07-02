@@ -46,14 +46,20 @@ export async function getCustomers(orgId: string): Promise<Customer[]> {
   return data || [];
 }
 
-export async function getCustomersPaginated(orgId: string, page = 0, pageSize = 20): Promise<{ data: Customer[]; count: number }> {
+export async function getCustomersPaginated(orgId: string, page = 0, pageSize = 20, search?: string): Promise<{ data: Customer[]; count: number }> {
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  const { data, count } = await supabase
+  let query = supabase
     .from("customers")
     .select("*", { count: "exact" })
-    .eq("organization_id", orgId)
+    .eq("organization_id", orgId);
+
+  if (search) {
+    query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+  }
+
+  const { data, count } = await query
     .order("created_at", { ascending: false })
     .range(from, to);
 
