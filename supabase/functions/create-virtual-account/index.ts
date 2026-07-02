@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
+const NOMBA_API_URL = Deno.env.get("NOMBA_API_URL") || "https://api.nomba.com/v1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -9,7 +11,7 @@ const corsHeaders = {
 
 async function getNombaToken() {
   const response = await fetch(
-    "https://api.nomba.com/v1/auth/token/issue",
+    `${NOMBA_API_URL}/auth/token/issue`,
     {
       method: "POST",
       headers: {
@@ -54,7 +56,7 @@ serve(async (req) => {
     }
 
     const response = await fetch(
-      "https://api.nomba.com/v1/accounts/virtual",
+      `${NOMBA_API_URL}/accounts/virtual`,
       {
         method: "POST",
         headers: {
@@ -87,7 +89,7 @@ serve(async (req) => {
 
     // Nomba may not return bank details synchronously; fetch them if missing
     if (!accountNumber) {
-      const fetchUrl = `https://api.nomba.com/v1/accounts/virtual/${accountRef}`;
+      const fetchUrl = `${NOMBA_API_URL}/accounts/virtual/${accountRef}`;
       console.log("Fetching VA details from:", fetchUrl);
       const fetchRes = await fetch(fetchUrl, {
           headers: {

@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
+const NOMBA_API_URL = Deno.env.get("NOMBA_API_URL") || "https://api.nomba.com/v1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -8,7 +10,7 @@ const corsHeaders = {
 };
 
 async function getNombaToken() {
-  const response = await fetch("https://api.nomba.com/v1/auth/token/issue", {
+  const response = await fetch(`${NOMBA_API_URL}/auth/token/issue`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "accountId": Deno.env.get("NOMBA_ACCOUNT_ID")! },
     body: JSON.stringify({
@@ -40,29 +42,29 @@ serve(async (req) => {
     let nombaPayload: Record<string, unknown> = {};
 
     if (type === "airtime") {
-      endpoint = "https://api.nomba.com/v1/bill/topup";
+      endpoint = `${NOMBA_API_URL}/bill/topup`;
       nombaPayload = {
-        amount: payload.amount,
+        amount: Math.round(payload.amount * 100),
         phoneNumber: payload.phoneNumber,
         network: payload.network.toUpperCase(),
         merchantTxRef: `air_${user.id.slice(0, 8)}_${Date.now()}`,
         senderName: payload.senderName || user.email,
       };
     } else if (type === "data") {
-      endpoint = "https://api.nomba.com/v1/bill/data";
+      endpoint = `${NOMBA_API_URL}/bill/data`;
       nombaPayload = {
-        amount: payload.amount,
+        amount: Math.round(payload.amount * 100),
         phoneNumber: payload.phoneNumber,
         network: payload.network.toUpperCase(),
         merchantTxRef: `dat_${user.id.slice(0, 8)}_${Date.now()}`,
       };
     } else if (type === "electricity") {
-      endpoint = "https://api.nomba.com/v1/bill/electricity";
+      endpoint = `${NOMBA_API_URL}/bill/electricity`;
       nombaPayload = {
         disco: payload.disco,
         merchantTxRef: `elec_${user.id.slice(0, 8)}_${Date.now()}`,
         payerName: payload.payerName || user.email,
-        amount: payload.amount,
+        amount: Math.round(payload.amount * 100),
         customerId: payload.customerId,
         meterType: payload.meterType || "PREPAID",
       };

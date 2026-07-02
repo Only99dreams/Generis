@@ -11,48 +11,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function verifySignature(
-  body: string,
-  signature: string,
-  timestamp: string,
-  secret: string
-): Promise<boolean> {
-  if (!secret) return true;
-  try {
-    const payload = JSON.parse(body);
-    const data = payload.data || {};
-    const merchant = data.merchant || {};
-    const transaction = data.transaction || {};
+async function hexHmacSha256(secret: string, data: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
-    const eventType = payload.event_type || "";
-    const requestId = payload.requestId || "";
-    const userId = merchant.userId || "";
-    const walletId = merchant.walletId || "";
-    const transactionId = transaction.transactionId || "";
-    const transactionType = transaction.type || "";
-    const transactionTime = transaction.time || "";
-    let responseCode = transaction.responseCode || "";
-    if (responseCode === "null") responseCode = "";
-
-    const hashingPayload = [
-      eventType, requestId, userId, walletId,
-      transactionId, transactionType, transactionTime,
-      responseCode, timestamp,
-    ].join(":");
-
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(hashingPayload));
-    const expected = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-    return expected === signature;
-  } catch {
-    return false;
-  }
+function koboToNaira(kobo: number): number {
+  return kobo / 100;
 }
 
 serve(async (req) => {
@@ -67,28 +39,41 @@ serve(async (req) => {
   try {
     const body = await req.text();
     const signature = req.headers.get("nomba-signature") || "";
-    const timestamp = req.headers.get("nomba-timestamp") || "";
 
-    if (!verifySignature(body, signature, timestamp, NOMBA_WEBHOOK_SECRET)) {
+    const expected = await hexHmacSha256(NOMBA_WEBHOOK_SECRET, body);
+    if (signature !== expected) {
       console.log("Signature verification failed");
       return new Response("Unauthorized", { status: 401 });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const event = JSON.parse(body);
+    const eventType = event.event_type || event.type || "";
+    const requestId = event.requestId || "";
 
-    const webhook = JSON.parse(body);
-    const eventType = webhook.event_type;
+    if (requestId) {
+      const { error: dupErr } = await supabase
+        .from("processed_events")
+        .insert({ request_id: requestId });
+      if (dupErr && dupErr.code === "23505") {
+        console.log("Duplicate event, already processed:", requestId);
+        return new Response("OK", { status: 200 });
+      }
+      if (dupErr) {
+        console.log("processed_events insert error:", dupErr);
+      }
+    }
 
     if (eventType === "payment_success") {
-      return await handlePaymentSuccess(webhook, supabase);
+      return await handlePaymentSuccess(event, supabase);
     }
 
     if (eventType === "payment_reversal") {
-      return await handlePaymentReversal(webhook, supabase);
+      return await handlePaymentReversal(event, supabase);
     }
 
     if (eventType === "payout_success" || eventType === "payout_failed" || eventType === "payout_refund") {
-      return await handlePayoutEvent(eventType, webhook, supabase);
+      return await handlePayoutEvent(eventType, event, supabase);
     }
 
     return new Response("OK", { status: 200 });
@@ -106,13 +91,16 @@ async function handlePaymentSuccess(webhook: any, supabase: any) {
   const customerData = webhook.data?.customer || {};
   const aliasAccountNumber = tx.aliasAccountNumber;
   const sessionId = tx.sessionId;
-  const amount = tx.transactionAmount;
-  const fee = tx.fee || 0;
+
+  const amountKobo = tx.transactionAmount;
+  const feeKobo = tx.fee || 0;
+  const creditAmountNaira = koboToNaira(amountKobo - feeKobo);
+
   const narration = tx.narration || "";
   const senderName = customerData.senderName || "";
   const senderBank = customerData.bankName || "";
 
-  if (!aliasAccountNumber || !sessionId || !amount) {
+  if (!aliasAccountNumber || !sessionId || !amountKobo) {
     return new Response("OK - not a VA transaction", { status: 200 });
   }
 
@@ -158,14 +146,13 @@ async function handlePaymentSuccess(webhook: any, supabase: any) {
     return new Response("Wallet not found", { status: 404 });
   }
 
-  const creditAmount = amount - fee;
   const reference = `NMB-${sessionId}`;
 
   if (isOrg && va.customer_id) {
     const { error: payErr } = await supabase.from("payments").insert({
       organization_id: va.organization_id,
       customer_id: va.customer_id,
-      amount: creditAmount,
+      amount: creditAmountNaira,
       reference,
       payment_channel: "virtual_account",
       payment_status: "completed",
@@ -180,7 +167,7 @@ async function handlePaymentSuccess(webhook: any, supabase: any) {
     organization_id: va.organization_id,
     user_id: walletUserId,
     transaction_type: "credit",
-    amount: creditAmount,
+    amount: creditAmountNaira,
     reference,
     status: "completed",
     category: "payment",
@@ -189,7 +176,8 @@ async function handlePaymentSuccess(webhook: any, supabase: any) {
       session_id: sessionId,
       sender_name: senderName,
       sender_bank: senderBank,
-      fee,
+      fee_kobo: feeKobo,
+      amount_kobo: amountKobo,
       va_account_number: aliasAccountNumber,
       va_account_name: tx.aliasAccountName,
     },
@@ -203,18 +191,18 @@ async function handlePaymentSuccess(webhook: any, supabase: any) {
     return new Response("OK", { status: 200 });
   }
 
-  const newBalance = Number(wallet.available_balance) + creditAmount;
+  const newBalance = Number(wallet.available_balance) + creditAmountNaira;
   await supabase
     .from("wallets")
     .update({ available_balance: newBalance, updated_at: new Date().toISOString() })
     .eq("id", wallet.id);
 
   const notifyTitle = isOrg
-    ? `Payment received: ${formatCurrency(creditAmount)}`
-    : `Money received: ${formatCurrency(creditAmount)}`;
+    ? `Payment received: ${formatCurrency(creditAmountNaira)}`
+    : `Money received: ${formatCurrency(creditAmountNaira)}`;
   const notifyMessage = isOrg
-    ? `A payment of ${formatCurrency(creditAmount)} was received from ${senderName || aliasAccountNumber}.`
-    : `${formatCurrency(creditAmount)} has been credited to your wallet from ${senderName || aliasAccountNumber}.`;
+    ? `A payment of ${formatCurrency(creditAmountNaira)} was received from ${senderName || aliasAccountNumber}.`
+    : `${formatCurrency(creditAmountNaira)} has been credited to your wallet from ${senderName || aliasAccountNumber}.`;
 
   if (isOrg) {
     const { data: members } = await supabase
@@ -248,8 +236,9 @@ async function handlePayoutEvent(eventType: string, webhook: any, supabase: any)
   const tx = webhook.data?.transaction || {};
   const merchantTxRef = tx.merchantTxRef;
   const sessionId = tx.sessionId;
-  const amount = tx.transactionAmount;
-  const fee = tx.fee || 0;
+  const amountKobo = tx.transactionAmount;
+  const amountNaira = koboToNaira(amountKobo || 0);
+  const feeKobo = tx.fee || 0;
   const narration = tx.narration || "";
   const recipientName = webhook.data?.customer?.recipientName || "";
 
@@ -290,7 +279,7 @@ async function handlePayoutEvent(eventType: string, webhook: any, supabase: any)
       user_id: transfer.user_id,
       organization_id: transfer.organization_id,
       title: "Transfer Successful",
-      message: `₦${amount} transferred to ${transfer.beneficiary_name || recipientName} successfully`,
+      message: `${formatCurrency(amountNaira)} transferred to ${transfer.beneficiary_name || recipientName} successfully`,
     });
 
     return new Response(JSON.stringify({ success: true }), {
@@ -298,7 +287,6 @@ async function handlePayoutEvent(eventType: string, webhook: any, supabase: any)
     });
   }
 
-  // For failed/refund: only reverse if status is still "pending" (avoid double-reversal)
   if (transfer.transfer_status !== "pending") {
     return new Response("OK - already processed", { status: 200 });
   }
@@ -318,7 +306,7 @@ async function handlePayoutEvent(eventType: string, webhook: any, supabase: any)
 
   await supabase.rpc("credit_wallet", {
     p_user_id: transfer.user_id,
-    p_amount: amount,
+    p_amount: amountNaira,
   });
 
   const reversalRef = `REV-${merchantTxRef}`;
@@ -326,7 +314,7 @@ async function handlePayoutEvent(eventType: string, webhook: any, supabase: any)
     user_id: transfer.user_id,
     organization_id: transfer.organization_id,
     transaction_type: "credit",
-    amount,
+    amount: amountNaira,
     reference: reversalRef,
     status: "completed",
     category: "reversal",
@@ -349,7 +337,7 @@ async function handlePayoutEvent(eventType: string, webhook: any, supabase: any)
     user_id: transfer.user_id,
     organization_id: transfer.organization_id,
     title: `Transfer ${statusLabel}`,
-    message: `₦${amount} transfer to ${transfer.beneficiary_name || recipientName} ${statusLabel}. ${reasonText}. Amount credited back to wallet.`,
+    message: `${formatCurrency(amountNaira)} transfer to ${transfer.beneficiary_name || recipientName} ${statusLabel}. ${reasonText}. Amount credited back to wallet.`,
   });
 
   return new Response(JSON.stringify({ success: true }), {
@@ -361,12 +349,13 @@ async function handlePaymentReversal(webhook: any, supabase: any) {
   const tx = webhook.data?.transaction || {};
   const aliasAccountNumber = tx.aliasAccountNumber;
   const sessionId = tx.sessionId;
-  const amount = tx.transactionAmount;
-  const fee = tx.fee || 0;
+  const amountKobo = tx.transactionAmount;
+  const feeKobo = tx.fee || 0;
+  const debitAmountNaira = koboToNaira(amountKobo - feeKobo);
   const narration = tx.narration || "";
   const senderName = webhook.data?.customer?.senderName || "";
 
-  if (!sessionId || !amount) {
+  if (!sessionId || !amountKobo) {
     return new Response("OK", { status: 200 });
   }
 
@@ -388,7 +377,7 @@ async function handlePaymentReversal(webhook: any, supabase: any) {
     organization_id: originalTx.organization_id,
     user_id: originalTx.user_id,
     transaction_type: "debit",
-    amount: amount - fee,
+    amount: debitAmountNaira,
     reference: reversalRef,
     status: "completed",
     category: "reversal",
@@ -410,7 +399,6 @@ async function handlePaymentReversal(webhook: any, supabase: any) {
     return new Response("OK - already processed", { status: 200 });
   }
 
-  const debitAmount = amount - fee;
   const { data: wallet } = await supabase
     .from("wallets")
     .select("*")
@@ -418,7 +406,7 @@ async function handlePaymentReversal(webhook: any, supabase: any) {
     .maybeSingle();
 
   if (wallet) {
-    const newBalance = Number(wallet.available_balance) - debitAmount;
+    const newBalance = Number(wallet.available_balance) - debitAmountNaira;
     await supabase
       .from("wallets")
       .update({ available_balance: newBalance, updated_at: new Date().toISOString() })
@@ -436,7 +424,7 @@ async function handlePaymentReversal(webhook: any, supabase: any) {
         organization_id: originalTx.organization_id,
         user_id: m.user_id,
         title: "Payment Reversed",
-        message: `A payment of ${formatCurrency(amount - fee)} from ${senderName || aliasAccountNumber} has been reversed. ${formatCurrency(amount - fee)} has been debited from your wallet.`,
+        message: `A payment of ${formatCurrency(debitAmountNaira)} from ${senderName || aliasAccountNumber} has been reversed. ${formatCurrency(debitAmountNaira)} has been debited from your wallet.`,
       }));
       await supabase.from("notifications").insert(notifications);
     }
@@ -444,7 +432,7 @@ async function handlePaymentReversal(webhook: any, supabase: any) {
     await supabase.from("notifications").insert({
       user_id: originalTx.user_id,
       title: "Payment Reversed",
-      message: `${formatCurrency(amount - fee)} payment from ${senderName || aliasAccountNumber} reversed. Amount debited from your wallet.`,
+      message: `${formatCurrency(debitAmountNaira)} payment from ${senderName || aliasAccountNumber} reversed. Amount debited from your wallet.`,
     });
   }
 

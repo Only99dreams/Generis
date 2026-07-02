@@ -1,6 +1,8 @@
+const NOMBA_API_URL = Deno.env.get("NOMBA_API_URL") || "https://api.nomba.com/v1";
+
 export async function getNombaToken() {
   const response = await fetch(
-    "https://api.nomba.com/v1/auth/token/issue",
+    `${NOMBA_API_URL}/auth/token/issue`,
     {
       method: "POST",
       headers: {

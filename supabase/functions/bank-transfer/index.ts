@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
+const NOMBA_API_URL = Deno.env.get("NOMBA_API_URL") || "https://api.nomba.com/v1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -9,7 +11,7 @@ const corsHeaders = {
 
 async function getNombaToken() {
   const response = await fetch(
-    "https://api.nomba.com/v1/auth/token/issue",
+    `${NOMBA_API_URL}/auth/token/issue`,
     {
       method: "POST",
       headers: {
@@ -250,8 +252,10 @@ serve(async (req) => {
     try {
       const token = await getNombaToken();
 
+      const amountKobo = Math.round(amount * 100);
+
       const transferResponse = await fetch(
-        "https://api.nomba.com/v1/transfers/bank",
+        `${NOMBA_API_URL}/transfers/bank`,
         {
           method: "POST",
           headers: {
@@ -260,7 +264,7 @@ serve(async (req) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            amount,
+            amount: amountKobo,
             bankCode,
             accountNumber,
             accountName: beneficiaryName,

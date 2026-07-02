@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
+const NOMBA_API_URL = Deno.env.get("NOMBA_API_URL") || "https://api.nomba.com/v1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -8,7 +10,7 @@ const corsHeaders = {
 };
 
 async function getNombaToken() {
-  const response = await fetch("https://api.nomba.com/v1/auth/token/issue", {
+  const response = await fetch(`${NOMBA_API_URL}/auth/token/issue`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "accountId": Deno.env.get("NOMBA_ACCOUNT_ID")! },
     body: JSON.stringify({
@@ -35,7 +37,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Failed to authenticate with Nomba" }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const response = await fetch("https://api.nomba.com/v1/transfers/bank/lookup", {
+    const response = await fetch(`${NOMBA_API_URL}/transfers/bank/lookup`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
