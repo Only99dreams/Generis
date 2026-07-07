@@ -3,7 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, CreditCard, Receipt, Send,
   Bell, Settings, LogOut, ChevronDown, Menu, X, Wallet, Building2,
-  ArrowLeftRight, ArrowDownToLine, Sparkles, Globe,
+  ArrowLeftRight, ArrowDownToLine, Sparkles, Globe, Link as LinkIcon, Clock, Repeat, PiggyBank,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -17,10 +17,14 @@ import LanguageSwitcher from "./LanguageSwitcher";
 const individualNav = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "/receive", label: "Receive", icon: ArrowDownToLine },
+  { path: "/payment-links", label: "Payment Links", icon: LinkIcon },
   { path: "/cards", label: "Cards", icon: CreditCard },
   { path: "/bill-payments", label: "Bill Payments", icon: Receipt },
   { path: "/transactions", label: "Statement", icon: ArrowLeftRight },
   { path: "/transfers", label: "Transfers", icon: Send },
+  { path: "/subscriptions", label: "Subscription", icon: Repeat },
+  { path: "/scheduled-transfers", label: "Scheduled", icon: Clock },
+  { path: "/sub-wallets", label: "Savings Goals", icon: PiggyBank },
   { path: "/notifications", label: "Notifications", icon: Bell },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
@@ -30,6 +34,7 @@ const orgNav = [
   { path: "/customers", label: "Customers", icon: Users },
   { path: "/invoices", label: "Invoices", icon: FileText },
   { path: "/payments", label: "Payments", icon: Receipt },
+  { path: "/payment-links", label: "Payment Links", icon: LinkIcon },
   { path: "/transactions", label: "Statement", icon: ArrowLeftRight },
   { path: "/notifications", label: "Notifications", icon: Bell },
   { path: "/settings", label: "Settings", icon: Settings },
@@ -52,15 +57,20 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
     const map: Record<string, string> = {
       "/dashboard": t("nav.dashboard"),
       "/receive": t("nav.receive"),
+      "/payment-links": "Payment Links",
       "/cards": t("nav.cards"),
       "/bill-payments": t("nav.billPayments"),
       "/transactions": t("nav.statement"),
       "/transfers": t("nav.transfers"),
+      "/subscriptions": "Subscriptions",
+      "/scheduled-transfers": "Scheduled Transfers",
+      "/sub-wallets": "Savings Goals",
       "/notifications": t("nav.notifications"),
       "/settings": t("nav.settings"),
       "/customers": t("nav.customers"),
       "/invoices": t("nav.invoices"),
       "/payments": t("nav.payments"),
+      "/payment-links": "Payment Links",
       "/receipts": t("nav.receipts"),
     };
     return map[path] || path;

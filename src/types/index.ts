@@ -190,8 +190,141 @@ export interface SavedCard {
   created_at: string;
 }
 
+export interface PaymentLink {
+  id: string;
+  reference: string;
+  user_id: string | null;
+  organization_id: string | null;
+  virtual_account_id: string | null;
+  amount: number | null;
+  description: string | null;
+  status: string;
+  expires_at: string | null;
+  times_used: number;
+  created_at: string;
+  updated_at: string;
+  virtual_accounts: {
+    account_number: string;
+    account_name: string;
+    bank_name: string;
+  } | null;
+  owner_name?: string;
+  url?: string;
+}
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  saved_card_id: string;
+  name: string;
+  amount: number;
+  frequency: "daily" | "weekly" | "monthly" | "yearly";
+  description: string | null;
+  next_billing_date: string;
+  last_billing_date: string | null;
+  billing_day: number;
+  status: "active" | "paused" | "cancelled" | "expired";
+  total_charges: number;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+  saved_cards?: { card_brand: string; last4: string } | null;
+}
+
+export interface SubscriptionLog {
+  id: string;
+  subscription_id: string;
+  status: "success" | "failed";
+  amount: number;
+  reference: string | null;
+  error_message: string | null;
+  charged_at: string;
+}
+
+export interface Budget {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  category: string;
+  name: string;
+  amount: number;
+  spent: number;
+  period: "weekly" | "monthly" | "yearly";
+  start_date: string;
+  end_date: string | null;
+  color: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledTransfer {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  beneficiary_name: string;
+  beneficiary_account: string;
+  bank_code: string;
+  bank_name: string;
+  amount: number;
+  narration: string | null;
+  frequency: "daily" | "weekly" | "monthly" | "once";
+  interval_day: number | null;
+  interval_weekday: number | null;
+  start_date: string;
+  end_date: string | null;
+  next_run: string;
+  last_run: string | null;
+  status: "active" | "paused" | "cancelled" | "completed";
+  total_executions: number;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledTransferLog {
+  id: string;
+  scheduled_transfer_id: string;
+  status: "success" | "failed";
+  amount: number;
+  reference: string | null;
+  error_message: string | null;
+  executed_at: string;
+}
+
 export interface BankAccountLookup {
   accountName: string;
   accountNumber: string;
   bankCode: string;
+}
+
+export interface SubWallet {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  name: string;
+  target_amount: number | null;
+  current_balance: number;
+  color: string;
+  icon: string;
+  goal_date: string | null;
+  status: "active" | "completed" | "archived";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavingsPlan {
+  id: string;
+  user_id: string;
+  sub_wallet_id: string;
+  amount: number;
+  frequency: "daily" | "weekly" | "monthly";
+  next_run: string;
+  last_run: string | null;
+  status: "active" | "paused" | "cancelled" | "completed";
+  total_saved: number;
+  total_executions: number;
+  created_at: string;
+  updated_at: string;
+  sub_wallets?: { name: string; current_balance: number } | null;
 }

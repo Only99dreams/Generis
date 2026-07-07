@@ -46,6 +46,8 @@ serve(async (req) => {
     organizationId = organizationId || null;
     customerId = customerId || null;
 
+    const subAccountId = Deno.env.get("NOMBA_SUB_ACCOUNT_ID") || null;
+
     const token = await getNombaToken();
     const accountRef = crypto.randomUUID();
 
@@ -55,8 +57,13 @@ serve(async (req) => {
       accountName = accountName.padEnd(8);
     }
 
+    // Scope VA to subaccount so payments land in the organization's subaccount
+    const vaEndpoint = subAccountId
+      ? `${NOMBA_API_URL}/accounts/virtual/${subAccountId}`
+      : `${NOMBA_API_URL}/accounts/virtual`;
+
     const response = await fetch(
-      `${NOMBA_API_URL}/accounts/virtual`,
+      vaEndpoint,
       {
         method: "POST",
         headers: {

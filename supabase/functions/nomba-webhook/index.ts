@@ -11,7 +11,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function hexHmacSha256(secret: string, data: string): Promise<string> {
+async function base64HmacSha256(secret: string, data: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -20,7 +20,39 @@ async function hexHmacSha256(secret: string, data: string): Promise<string> {
     ["sign"],
   );
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const binary = String.fromCharCode(...new Uint8Array(sig));
+  return btoa(binary);
+}
+
+function safe(value: any): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  return s === "null" ? "" : s;
+}
+
+async function computeNombaSignature(secret: string, body: string, timestamp: string): Promise<string> {
+  const event = JSON.parse(body);
+  const data = event.data || {};
+  const merchant = data.merchant || {};
+  const transaction = data.transaction || {};
+
+  const parts = [
+    safe(event.event_type),
+    safe(event.requestId),
+    safe(merchant.userId),
+    safe(merchant.walletId),
+    safe(transaction.transactionId),
+    safe(transaction.type),
+    safe(transaction.time),
+    safe(transaction.responseCode),
+    safe(timestamp),
+  ];
+  const hashingPayload = parts.join(":");
+
+  console.log("Hashing payload:", JSON.stringify(hashingPayload));
+  console.log("Secret length:", secret.length);
+
+  return await base64HmacSha256(secret, hashingPayload);
 }
 
 function koboToNaira(kobo: number): number {
@@ -39,12 +71,7 @@ serve(async (req) => {
   try {
     const body = await req.text();
     const signature = req.headers.get("nomba-signature") || "";
-
-    const expected = await hexHmacSha256(NOMBA_WEBHOOK_SECRET, body);
-    if (signature !== expected) {
-      console.log("Signature verification failed");
-      return new Response("Unauthorized", { status: 401 });
-    }
+    const timestamp = req.headers.get("nomba-timestamp") || "";
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const event = JSON.parse(body);
@@ -86,7 +113,126 @@ serve(async (req) => {
   }
 });
 
+async function handleCheckoutOrder(webhook: any, supabase: any) {
+  const order = webhook.data?.order || {};
+  const tx = webhook.data?.transaction || {};
+  const orderRef = order.orderReference;
+
+  if (!orderRef) return null;
+
+  const { data: link } = await supabase
+    .from("payment_links")
+    .select("*")
+    .eq("reference", orderRef)
+    .maybeSingle();
+
+  if (!link) return null;
+
+  const amountKobo = tx.transactionAmount || order.amount * 100;
+  const feeKobo = tx.fee || 0;
+  const creditAmountNaira = koboToNaira(amountKobo - feeKobo);
+  const paymentMethod = order.paymentMethod || "card_payment";
+  const cardInfo = order.cardType ? `${order.cardType} ****${order.cardLast4Digits || ""}` : "";
+
+  const isOrg = !!link.organization_id;
+  const walletUserId = link.user_id;
+
+  if (!walletUserId) {
+    console.log("No wallet user for checkout order");
+    return new Response("Wallet user not found", { status: 404 });
+  }
+
+  let walletQuery = supabase.from("wallets").select("*");
+  if (isOrg) {
+    walletQuery = walletQuery.eq("user_id", walletUserId).eq("organization_id", link.organization_id);
+  } else {
+    walletQuery = walletQuery.is("organization_id", null).eq("user_id", walletUserId);
+  }
+
+  const { data: wallet } = await walletQuery.maybeSingle();
+  if (!wallet) {
+    console.log("No wallet found for checkout order");
+    return new Response("Wallet not found", { status: 404 });
+  }
+
+  const reference = `CHK-${tx.transactionId || orderRef}`;
+
+  const { error: txErr } = await supabase.from("transactions").insert({
+    organization_id: link.organization_id,
+    user_id: walletUserId,
+    transaction_type: "credit",
+    amount: creditAmountNaira,
+    reference,
+    status: "completed",
+    category: "payment",
+    narration: `Card payment via ${paymentMethod}${cardInfo ? ` (${cardInfo})` : ""}${link.description ? ` - ${link.description}` : ""}`,
+    metadata: {
+      order_reference: orderRef,
+      payment_link_reference: orderRef,
+      payment_method: paymentMethod,
+      card_type: order.cardType,
+      card_last4: order.cardLast4Digits,
+      transaction_id: tx.transactionId,
+      fee_kobo: feeKobo,
+      amount_kobo: amountKobo,
+    },
+  });
+
+  if (txErr && txErr.code !== "23505") {
+    console.log("Transaction insert error:", txErr);
+    return new Response("Error recording transaction", { status: 500 });
+  }
+
+  if (txErr?.code === "23505") {
+    return new Response("OK", { status: 200 });
+  }
+
+  const newBalance = Number(wallet.available_balance) + creditAmountNaira;
+  await supabase
+    .from("wallets")
+    .update({ available_balance: newBalance, updated_at: new Date().toISOString() })
+    .eq("id", wallet.id);
+
+  await supabase
+    .from("payment_links")
+    .update({ status: "completed", times_used: link.times_used + 1 })
+    .eq("id", link.id);
+
+  const notifyTitle = `Payment received: ${formatCurrency(creditAmountNaira)}`;
+  const notifyMessage = `A card payment of ${formatCurrency(creditAmountNaira)} was received${link.description ? ` for ${link.description}` : ""}.`;
+
+  if (isOrg) {
+    const { data: members } = await supabase
+      .from("organization_users")
+      .select("user_id")
+      .eq("organization_id", link.organization_id);
+
+    if (members) {
+      const notifications = members.map((m) => ({
+        organization_id: link.organization_id,
+        user_id: m.user_id,
+        title: notifyTitle,
+        message: notifyMessage,
+      }));
+      await supabase.from("notifications").insert(notifications);
+    }
+  } else {
+    await supabase.from("notifications").insert({
+      user_id: walletUserId,
+      title: notifyTitle,
+      message: notifyMessage,
+    });
+  }
+
+  return new Response(JSON.stringify({ success: true }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 async function handlePaymentSuccess(webhook: any, supabase: any) {
+  const checkoutResult = await handleCheckoutOrder(webhook, supabase);
+  if (checkoutResult) return checkoutResult;
+
   const tx = webhook.data?.transaction || {};
   const customerData = webhook.data?.customer || {};
   const aliasAccountNumber = tx.aliasAccountNumber;

@@ -16,9 +16,13 @@ import TransactionsPage from "../pages/TransactionsPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import Settings from "../pages/Settings";
 import PaymentPage from "../pages/PaymentPage";
+import PaymentLinksPage from "../pages/PaymentLinksPage";
 import ReceivePage from "../pages/ReceivePage";
 import Cards from "../pages/Cards";
 import BillPayments from "../pages/BillPayments";
+import ScheduledTransfersPage from "../pages/ScheduledTransfersPage";
+import SubscriptionsPage from "../pages/SubscriptionsPage";
+import SubWalletsPage from "../pages/SubWalletsPage";
 
 export default function AppRoutes() {
   return (
@@ -34,6 +38,8 @@ export default function AppRoutes() {
               <Route element={<Layout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/receive" element={<ReceivePage />} />
+                <Route path="/payment-links" element={<PaymentLinksPage />} />
+                <Route path="/scheduled-transfers" element={<ScheduledTransfersPage />} />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/customers/:id" element={<CustomerDetail />} />
                 <Route path="/invoices" element={<Invoices />} />
@@ -41,6 +47,8 @@ export default function AppRoutes() {
                 <Route path="/receipts" element={<Receipts />} />
                 <Route path="/cards" element={<Cards />} />
                 <Route path="/bill-payments" element={<BillPayments />} />
+                <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                <Route path="/sub-wallets" element={<SubWalletsPage />} />
                 <Route path="/transfers" element={<Transfers />} />
                 <Route path="/transactions" element={<TransactionsPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />

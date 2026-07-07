@@ -20,6 +20,8 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { cn, formatCurrency, formatDate } from "../lib/utils";
+import BudgetsWidget from "../components/BudgetsWidget";
+import SubWalletsWidget from "../components/SubWalletsWidget";
 import type { Wallet as WalletType, Transaction, Analytics } from "../types";
 
 const chartData = [
@@ -343,6 +345,16 @@ export default function Dashboard() {
 
               <Card>
                 <CardContent className="p-5">
+                  <BudgetsWidget />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <SubWalletsWidget />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
                   <AiInsights balance={bal} transactions={transactions} analyticsData={analyticsData} />
                 </CardContent>
               </Card>
@@ -527,6 +539,16 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
+              <Card>
+                <CardContent className="p-5">
+                  <BudgetsWidget />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <SubWalletsWidget />
+                </CardContent>
+              </Card>
               <Card>
                 <CardContent className="p-5">
                   <AiInsights balance={bal} transactions={transactions} analyticsData={analyticsData} />
