@@ -70,7 +70,6 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
       "/customers": t("nav.customers"),
       "/invoices": t("nav.invoices"),
       "/payments": t("nav.payments"),
-      "/payment-links": "Payment Links",
       "/receipts": t("nav.receipts"),
     };
     return map[path] || path;

@@ -254,7 +254,7 @@ export default function SubscriptionsPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold">{s.name}</p>
                       <Badge className={statusBadge(s.status)}>{s.status}</Badge>
-                      <Badge variant="outline">{frequencyLabel(s.frequency)}</Badge>
+                      <Badge variant="default">{frequencyLabel(s.frequency)}</Badge>
                     </div>
                     <p className="text-lg font-bold text-brand-yellow-dark">{formatCurrency(s.amount)}</p>
                     {s.description && <p className="text-xs text-gray-400">{s.description}</p>}

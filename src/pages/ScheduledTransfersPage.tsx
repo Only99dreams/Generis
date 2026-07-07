@@ -41,14 +41,14 @@ export default function ScheduledTransfersPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [banks, setBanks] = useState<Bank[] | null>(null);
+  const [banks, setBanks] = useState<Bank[] | undefined>(undefined);
 
   const amountNum = Number(amount) || 0;
 
   useEffect(() => {
     loadSchedules();
     supabase.functions.invoke("fetch-banks").then(({ data }) => {
-      if (data?.banks?.length) setBanks(data.banks);
+      if (data?.banks?.length) setBanks(data.banks as Bank[]);
     }).catch(() => {});
   }, []);
 
@@ -422,7 +422,7 @@ export default function ScheduledTransfersPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold">{formatCurrency(s.amount)}</p>
                       <Badge className={statusBadge(s.status)}>{s.status}</Badge>
-                      <Badge variant="outline">{frequencyLabel(s.frequency)}</Badge>
+                      <Badge variant="default">{frequencyLabel(s.frequency)}</Badge>
                     </div>
                     <p className="text-sm text-gray-600">
                       To: {s.beneficiary_name} · {s.beneficiary_account} · {s.bank_name}
